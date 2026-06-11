@@ -18,7 +18,7 @@
   "content_scripts": [
     {
       "js": [
-        "assets/index.ts-CQ3XvENv.js"
+        "assets/index.ts-SQCN9htH.js"
       ],
       "matches": [
         "<all_urls>"
@@ -31,7 +31,7 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.ts-CQ3XvENv.js"
+        "assets/index.ts-SQCN9htH.js"
       ],
       "use_dynamic_url": false
     }

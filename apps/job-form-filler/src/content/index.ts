@@ -20,14 +20,16 @@ const KEYWORDS = {
   requiresSponsorship: ["sponsor", "visa", "sponsorship"],
 };
 
-// Help helper to match strings against keywords
+// Heuristics to identify complex / AI questions
+const AI_KEYWORDS = ["?", "why", "describe", "explain", "reason", "tell us", "experience with", "interest in", "cover letter", "statement", "additional details"];
+
 function matchesKeywords(identifiers: string[], keywords: string[]): boolean {
   return identifiers.some((id) =>
     keywords.some((kw) => id.toLowerCase().includes(kw.toLowerCase()))
   );
 }
 
-// React-compatible element value updater
+// React-compatible value injector
 function setNativeValue(
   element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
   value: string
@@ -44,38 +46,62 @@ function setNativeValue(
     element.value = value;
   }
 
-  // Dispatch events to trigger framework reactive updates
   element.dispatchEvent(new Event("input", { bubbles: true }));
   element.dispatchEvent(new Event("change", { bubbles: true }));
   element.dispatchEvent(new Event("blur", { bubbles: true }));
 }
 
-// Convert Base64 data URL to a File object
 async function base64ToFile(base64: string, filename: string, mimeType: string): Promise<File> {
   const res = await fetch(base64);
   const blob = await res.blob();
   return new File([blob], filename, { type: mimeType });
 }
 
-// Main Form Filling Engine
-async function fillForm(payload: any): Promise<number> {
-  const { personal, education, experience, resume } = payload;
-  let filledCount = 0;
+function triggerHighlight(element: HTMLElement) {
+  element.classList.add("autofilled-highlight");
+  setTimeout(() => element.classList.remove("autofilled-highlight"), 2500);
+}
 
-  // Find all form elements
+// Scrapes job/company details from DOM
+function scrapePageDetails() {
+  let company = "";
+  let role = "";
+
+  // Greenhouse selectors
+  const ghRole = document.querySelector(".app-title")?.textContent;
+  const ghCompany = document.querySelector(".company-name")?.textContent || document.querySelector("#logo img")?.getAttribute("alt");
+  
+  // Lever selectors
+  const levRole = document.querySelector(".posting-header h2")?.textContent;
+  const levCompany = document.querySelector(".posting-header .categories-list")?.textContent; // usually department, fallback to document title
+
+  role = ghRole || levRole || document.title || "Target Position";
+  company = ghCompany?.trim() || levCompany?.split("•")[0]?.trim() || "Target Company";
+
+  return { company, role };
+}
+
+// Main Form Filling Pipeline
+async function fillForm(payload: any): Promise<{ filledCount: number; aiCount: number }> {
+  const { personal, education, experience, resume, geminiApiKey, resumeText } = payload;
+  let filledCount = 0;
+  let aiCount = 0;
+
+  // Track elements that are candidate for AI answering
+  const aiFields: { el: HTMLInputElement | HTMLTextAreaElement; label: string; index: number }[] = [];
+
   const formElements = Array.from(
     document.querySelectorAll("input, select, textarea")
   ) as (HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement)[];
 
   for (const el of formElements) {
-    // Collect element identifiers
     const id = el.id || "";
     const name = el.name || "";
     const placeholder = el.getAttribute("placeholder") || "";
     const autocomplete = el.getAttribute("autocomplete") || "";
     const ariaLabel = el.getAttribute("aria-label") || "";
 
-    // Search for labels
+    // Parse labels
     let labelText = "";
     const parentLabel = el.closest("label");
     if (parentLabel) {
@@ -107,14 +133,11 @@ async function fillForm(payload: any): Promise<number> {
           dataTransfer.items.add(file);
           el.files = dataTransfer.files;
 
-          // Dispatch change events
           el.dispatchEvent(new Event("change", { bubbles: true }));
           el.dispatchEvent(new Event("input", { bubbles: true }));
 
-          // Add visual highlights
           const highlightTarget = el.parentElement || el;
-          highlightTarget.classList.add("autofilled-highlight");
-          setTimeout(() => highlightTarget.classList.remove("autofilled-highlight"), 2500);
+          triggerHighlight(highlightTarget);
 
           filledCount++;
           continue;
@@ -124,7 +147,6 @@ async function fillForm(payload: any): Promise<number> {
       }
     }
 
-    // Skip hidden elements, buttons, and files (except resume already processed)
     if (
       el.type === "hidden" ||
       el.type === "submit" ||
@@ -135,67 +157,81 @@ async function fillForm(payload: any): Promise<number> {
     }
 
     let valueToFill = "";
+    let matchedStandard = false;
 
-    // --- 2. MATCH CUSTOM Q&A FIELDS ---
+    // --- 2. MATCH CUSTOM Q&A FIELDS (First Priority) ---
     if (personal.customFields && personal.customFields.length > 0) {
-      let customMatch = false;
       for (const custom of personal.customFields) {
         if (matchesKeywords(identifiers, [custom.key])) {
           valueToFill = custom.value;
-          customMatch = true;
+          matchedStandard = true;
           break;
         }
-      }
-      if (customMatch && valueToFill) {
-        fillValue(el, valueToFill);
-        continue;
       }
     }
 
     // --- 3. MATCH BUILT-IN PROFILE FIELDS ---
-    if (matchesKeywords(identifiers, KEYWORDS.firstName)) {
-      valueToFill = personal.firstName;
-    } else if (matchesKeywords(identifiers, KEYWORDS.lastName)) {
-      valueToFill = personal.lastName;
-    } else if (matchesKeywords(identifiers, KEYWORDS.fullName)) {
-      valueToFill = personal.firstName && personal.lastName
-        ? `${personal.firstName} ${personal.lastName}`
-        : personal.firstName || personal.lastName;
-    } else if (matchesKeywords(identifiers, KEYWORDS.email)) {
-      valueToFill = personal.email;
-    } else if (matchesKeywords(identifiers, KEYWORDS.phone)) {
-      valueToFill = personal.phone;
-    } else if (matchesKeywords(identifiers, KEYWORDS.city)) {
-      valueToFill = personal.city;
-    } else if (matchesKeywords(identifiers, KEYWORDS.country)) {
-      valueToFill = personal.country;
-    } else if (matchesKeywords(identifiers, KEYWORDS.linkedin)) {
-      valueToFill = personal.linkedin;
-    } else if (matchesKeywords(identifiers, KEYWORDS.github)) {
-      valueToFill = personal.github;
-    } else if (matchesKeywords(identifiers, KEYWORDS.website)) {
-      valueToFill = personal.website;
-    } else if (matchesKeywords(identifiers, KEYWORDS.school)) {
-      valueToFill = education.school;
-    } else if (matchesKeywords(identifiers, KEYWORDS.degree)) {
-      valueToFill = education.degree;
-    } else if (matchesKeywords(identifiers, KEYWORDS.major)) {
-      valueToFill = education.major;
-    } else if (matchesKeywords(identifiers, KEYWORDS.gradYear)) {
-      valueToFill = education.gradYear;
-    } else if (matchesKeywords(identifiers, KEYWORDS.company)) {
-      valueToFill = experience.company;
-    } else if (matchesKeywords(identifiers, KEYWORDS.jobTitle)) {
-      valueToFill = experience.title;
+    if (!matchedStandard) {
+      if (matchesKeywords(identifiers, KEYWORDS.firstName)) {
+        valueToFill = personal.firstName;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.lastName)) {
+        valueToFill = personal.lastName;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.fullName)) {
+        valueToFill = personal.firstName && personal.lastName
+          ? `${personal.firstName} ${personal.lastName}`
+          : personal.firstName || personal.lastName;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.email)) {
+        valueToFill = personal.email;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.phone)) {
+        valueToFill = personal.phone;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.city)) {
+        valueToFill = personal.city;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.country)) {
+        valueToFill = personal.country;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.linkedin)) {
+        valueToFill = personal.linkedin;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.github)) {
+        valueToFill = personal.github;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.website)) {
+        valueToFill = personal.website;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.school)) {
+        valueToFill = education.school;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.degree)) {
+        valueToFill = education.degree;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.major)) {
+        valueToFill = education.major;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.gradYear)) {
+        valueToFill = education.gradYear;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.company)) {
+        valueToFill = experience.company;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.jobTitle)) {
+        valueToFill = experience.title;
+        matchedStandard = true;
+      }
     }
 
-    // --- 4. WORK AUTHORIZATION & SPONSORSHIP RADIO / CHECKBOX ---
+    // --- 4. WORK AUTHORIZATION & SPONSORSHIP ---
     if (el instanceof HTMLInputElement && (el.type === "radio" || el.type === "checkbox")) {
       const isAuthField = matchesKeywords(identifiers, KEYWORDS.authorizedToWork);
       const isSponsorField = matchesKeywords(identifiers, KEYWORDS.requiresSponsorship);
 
       if (isAuthField || isSponsorField) {
-        const targetDecision = isAuthField ? personal.authorizedToWork : personal.requiresSponsorship; // "yes" or "no"
+        const targetDecision = isAuthField ? personal.authorizedToWork : personal.requiresSponsorship;
         const labelLower = labelText.toLowerCase();
         const valueLower = el.value.toLowerCase();
         const idLower = el.id.toLowerCase();
@@ -218,7 +254,7 @@ async function fillForm(payload: any): Promise<number> {
 
         if ((targetDecision === "yes" && representsYes) || (targetDecision === "no" && representsNo)) {
           if (!el.checked) {
-            el.click(); // Trigger native click
+            el.click();
             el.checked = true;
             el.dispatchEvent(new Event("change", { bubbles: true }));
             filledCount++;
@@ -228,54 +264,163 @@ async function fillForm(payload: any): Promise<number> {
       }
     }
 
-    // Fill textual or select input
-    if (valueToFill) {
-      fillValue(el, valueToFill);
-    }
-  }
-
-  function fillValue(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
-    if (element instanceof HTMLSelectElement) {
-      // Find matching option in select dropdown
-      const options = Array.from(element.options);
-      const matchedOption = options.find(
-        (opt) =>
-          opt.value.toLowerCase() === value.toLowerCase() ||
-          opt.text.toLowerCase().includes(value.toLowerCase())
-      );
-
-      if (matchedOption) {
-        setNativeValue(element, matchedOption.value);
-        triggerHighlight(element);
+    // Fill standard matches immediately
+    if (matchedStandard && valueToFill) {
+      if (el instanceof HTMLSelectElement) {
+        const options = Array.from(el.options);
+        const matchedOption = options.find(
+          (opt) =>
+            opt.value.toLowerCase() === valueToFill.toLowerCase() ||
+            opt.text.toLowerCase().includes(valueToFill.toLowerCase())
+        );
+        if (matchedOption) {
+          setNativeValue(el, matchedOption.value);
+          triggerHighlight(el);
+          filledCount++;
+        }
+      } else {
+        setNativeValue(el, valueToFill);
+        triggerHighlight(el);
         filledCount++;
       }
-    } else {
-      // Set text input, email, phone, textarea
-      setNativeValue(element, value);
-      triggerHighlight(element);
-      filledCount++;
+      continue;
+    }
+
+    // --- 5. FLAG AS CANDIDATE FOR AI FILLING ---
+    if (!matchedStandard && geminiApiKey && (el instanceof HTMLTextAreaElement || (el instanceof HTMLInputElement && el.type === "text"))) {
+      const labelRepresentation = labelText.trim() || placeholder.trim() || name.trim() || id.trim();
+      const isComplex = el instanceof HTMLTextAreaElement || matchesKeywords(identifiers, AI_KEYWORDS);
+      if (isComplex && labelRepresentation.length > 3) {
+        aiFields.push({
+          el,
+          label: labelRepresentation,
+          index: aiFields.length,
+        });
+      }
     }
   }
 
-  function triggerHighlight(element: HTMLElement) {
-    element.classList.add("autofilled-highlight");
-    setTimeout(() => element.classList.remove("autofilled-highlight"), 2500);
+  // --- 6. TRIGGER GEMINI AI FOR COMPLEX QUESTIONS ---
+  if (aiFields.length > 0 && geminiApiKey) {
+    const { company, role } = scrapePageDetails();
+    const promptText = buildGeminiPrompt(personal, education, experience, resumeText, company, role, aiFields);
+
+    try {
+      console.log(`Smart Job Filler: Querying Gemini for ${aiFields.length} questions...`);
+      const response = await new Promise<any>((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            type: "CALL_GEMINI",
+            payload: { apiKey: geminiApiKey, promptText },
+          },
+          (res) => {
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else {
+              resolve(res);
+            }
+          }
+        );
+      });
+
+      if (response && response.success) {
+        // Strip markdown backticks if returned in response
+        let cleanedJson = response.text.trim();
+        if (cleanedJson.startsWith("```")) {
+          cleanedJson = cleanedJson.replace(/^```json\s*|```$/gi, "").trim();
+        }
+
+        const data = JSON.parse(cleanedJson);
+        if (data && Array.isArray(data.answers)) {
+          for (const item of data.answers) {
+            const match = aiFields.find((f) => f.index === item.index);
+            if (match && item.text) {
+              setNativeValue(match.el, item.text);
+              triggerHighlight(match.el);
+              aiCount++;
+              filledCount++;
+            }
+          }
+        }
+      } else {
+        console.error("Gemini failed to answer questions:", response?.error);
+      }
+    } catch (err) {
+      console.error("AI form filling request failed:", err);
+    }
   }
 
-  return filledCount;
+  return { filledCount, aiCount };
+}
+
+// Builds unified prompt structure
+function buildGeminiPrompt(
+  personal: any,
+  education: any,
+  experience: any,
+  resumeText: string,
+  company: string,
+  role: string,
+  questions: any[]
+): string {
+  return `You are an AI assistant helping a candidate fill out a job application.
+Candidate Profile:
+Name: ${personal.firstName} ${personal.lastName}
+Email: ${personal.email}
+Phone: ${personal.phone}
+City: ${personal.city}, ${personal.country}
+LinkedIn: ${personal.linkedin}
+GitHub: ${personal.github}
+Portfolio/Website: ${personal.website}
+Work Auth: Authorized to work: ${personal.authorizedToWork}, Requires sponsorship: ${personal.requiresSponsorship}
+
+Education:
+School: ${education.school}
+Degree: ${education.degree} in ${education.major}
+Graduation Year: ${education.gradYear}
+
+Professional Experience:
+Company: ${experience.company}
+Title: ${experience.title}
+Dates: ${experience.startYear} - ${experience.isCurrent ? "Present" : experience.endYear}
+Description: ${experience.description}
+
+Resume/Bio context:
+${resumeText || "No detailed resume text provided."}
+
+Company Name: ${company}
+Job Title: ${role}
+
+The job application form contains the following complex questions. 
+For each question, draft a concise, professional, and tailored response (under 120 words) based on the candidate's profile and resume. Ensure the tone is proactive, honest, and matching standard engineering standards.
+Return the result strictly as a valid JSON object matching the schema below. Do not wrap in markdown or add notes outside the JSON structure.
+
+JSON Response Schema:
+{
+  "answers": [
+    {
+      "index": 0,
+      "text": "Drafted answer text for question 0..."
+    }
+  ]
+}
+
+Questions to answer:
+${questions.map((q) => `[Question ${q.index}]: "${q.label}"`).join("\n")}
+`;
 }
 
 // Listen for fill commands from popup
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "FILL_FORM") {
     fillForm(message.payload)
-      .then((count) => {
-        sendResponse({ success: true, filledCount: count });
+      .then((counts) => {
+        sendResponse({ success: true, ...counts });
       })
       .catch((err) => {
         sendResponse({ success: false, message: err.message });
       });
-    return true; // async response
+    return true; // async
   }
 });
-console.log("Smart Job Form Filler Content Script loaded");
+console.log("Smart AI Job Form Filler Content Script loaded");

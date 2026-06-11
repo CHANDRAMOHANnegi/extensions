@@ -17,11 +17,11 @@
   },
   "content_scripts": [
     {
-      "js": [
-        "assets/index.ts-SQCN9htH.js"
-      ],
       "matches": [
         "<all_urls>"
+      ],
+      "js": [
+        "src/content/index.ts-loader.js"
       ]
     }
   ],
@@ -31,7 +31,8 @@
         "<all_urls>"
       ],
       "resources": [
-        "assets/index.ts-SQCN9htH.js"
+        "**/*",
+        "*"
       ],
       "use_dynamic_url": false
     }

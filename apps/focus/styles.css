@@ -1,0 +1,197 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  width: 380px;
+  background: #f5f5f5;
+}
+
+.container {
+  background: white;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  text-align: center;
+}
+
+.header h1 {
+  font-size: 24px;
+  margin-bottom: 5px;
+}
+
+.header p {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.add-section {
+  padding: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+#urlInput {
+  flex: 1;
+  padding: 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+#urlInput:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+#addBtn {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+#addBtn:hover {
+  background: #5568d3;
+}
+
+.list-section {
+  padding: 0 20px 20px;
+}
+
+.list-section h3 {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+#blockedList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.site-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.site-item:hover {
+  background: #e9ecef;
+}
+
+.site-item span {
+  font-size: 14px;
+  color: #333;
+}
+
+.remove-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.remove-btn:hover {
+  background: #c82333;
+}
+
+.empty {
+  text-align: center;
+  padding: 30px;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Blocked page styles */
+.blocked-page {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.blocked-container {
+  background: white;
+  padding: 60px;
+  border-radius: 20px;
+  text-align: center;
+  max-width: 600px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.shield-icon {
+  font-size: 80px;
+  margin-bottom: 20px;
+}
+
+.blocked-container h1 {
+  font-size: 48px;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.subtitle {
+  font-size: 20px;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.blocked-url {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  font-family: monospace;
+  color: #dc3545;
+  font-size: 18px;
+  margin-bottom: 30px;
+}
+
+.motivation {
+  background: #e7f3ff;
+  border-left: 4px solid #667eea;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 30px;
+  text-align: left;
+}
+
+.motivation p {
+  color: #333;
+  line-height: 1.6;
+}
+
+.close-btn {
+  padding: 12px 30px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.close-btn:hover {
+  background: #5568d3;
+}

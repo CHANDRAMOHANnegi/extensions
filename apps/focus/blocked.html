@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="blocked-page">
+    <div class="blocked-container">
+        <div class="shield-icon">🛡️</div>
+        <h1>Site Blocked</h1>
+        <p class="subtitle">You've blocked this website to help you stay focused.</p>
+
+        <div class="blocked-url" id="blockedUrl"></div>
+
+        <div class="motivation">
+            <p>💡 <strong>Remember:</strong> Every moment counts. Stay focused on what truly matters.</p>
+        </div>
+
+        <button onclick="window.close()" class="close-btn">Close Tab</button>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const site = params.get('site');
+        if (site) {
+            document.getElementById('blockedUrl').textContent = site;
+        }
+    </script>
+</body>
+
+</html>

@@ -18,6 +18,9 @@ const KEYWORDS = {
   jobTitle: ["job title", "title", "role", "position"],
   authorizedToWork: ["authorized to work", "legally authorized", "right to work", "eligible to work"],
   requiresSponsorship: ["sponsor", "visa", "sponsorship"],
+  notice: ["notice period", "availability", "start date", "when can you start"],
+  salary: ["salary", "compensation", "expected ctc", "current ctc", "pay expectation"],
+  coverLetter: ["cover letter", "summary", "about you", "bio", "coverletter", "statement"],
 };
 
 // Heuristics to identify complex / AI questions
@@ -85,16 +88,50 @@ function scrapePageDetails() {
   let company = "";
   let role = "";
 
-  // Greenhouse selectors
+  // 1. Greenhouse selectors
   const ghRole = document.querySelector(".app-title")?.textContent;
   const ghCompany = document.querySelector(".company-name")?.textContent || document.querySelector("#logo img")?.getAttribute("alt");
   
-  // Lever selectors
+  // 2. Lever selectors
   const levRole = document.querySelector(".posting-header h2")?.textContent;
-  const levCompany = document.querySelector(".posting-header .categories-list")?.textContent; // usually department, fallback to document title
+  const levCompany = document.querySelector(".posting-header .categories-list")?.textContent;
 
-  role = ghRole || levRole || document.title || "Target Position";
-  company = ghCompany?.trim() || levCompany?.split("•")[0]?.trim() || "Target Company";
+  // 3. Workday selectors
+  const wdRole = document.querySelector('[data-automation-id="jobTitle"]')?.textContent || 
+                 document.querySelector('[data-automation-id="pageHeader"] h1')?.textContent;
+  let wdCompany = document.querySelector('[data-automation-id="companyLogo"] img')?.getAttribute("alt") ||
+                  document.querySelector('[data-automation-id="companyLogo"]')?.getAttribute("aria-label");
+  if (!wdCompany && window.location.hostname.includes("myworkdayjobs.com")) {
+    const parts = window.location.hostname.split(".");
+    if (parts.length > 0 && parts[0] !== "www") {
+      wdCompany = parts[0].replace(/[-_]+/g, " ");
+    }
+  }
+
+  // 4. Ashby selectors
+  const ashbyRole = document.querySelector(".ashby-job-posting-header h1")?.textContent ||
+                    document.querySelector(".ashby-job-title")?.textContent ||
+                    document.querySelector("h1.ashby-job-posting-title")?.textContent;
+  const ashbyCompany = document.querySelector(".ashby-job-posting-company")?.textContent ||
+                       document.querySelector(".ashby-company-name")?.textContent;
+
+  // 5. SmartRecruiters selectors
+  const srRole = document.querySelector(".job-title")?.textContent ||
+                 document.querySelector("h1.job-title")?.textContent ||
+                 document.querySelector("#job-title")?.textContent;
+  const srCompany = document.querySelector(".company-name")?.textContent ||
+                    document.querySelector('[itemprop="name"]')?.textContent;
+
+  role = ghRole || levRole || wdRole || ashbyRole || srRole || document.title || "Target Position";
+  company = ghCompany?.trim() || 
+            levCompany?.split("•")[0]?.trim() || 
+            wdCompany?.trim() || 
+            ashbyCompany?.trim() || 
+            srCompany?.trim() || 
+            "Target Company";
+
+  role = role.replace(/\s+/g, " ").trim();
+  company = company.replace(/\s+/g, " ").trim();
 
   return { company, role };
 }
@@ -239,6 +276,15 @@ async function fillForm(payload: any): Promise<{ filledCount: number; aiCount: n
         matchedStandard = true;
       } else if (matchesKeywords(identifiers, KEYWORDS.jobTitle)) {
         valueToFill = experience.title;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.notice)) {
+        valueToFill = personal.notice;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.salary)) {
+        valueToFill = personal.salary;
+        matchedStandard = true;
+      } else if (matchesKeywords(identifiers, KEYWORDS.coverLetter)) {
+        valueToFill = personal.coverLetter;
         matchedStandard = true;
       }
     }

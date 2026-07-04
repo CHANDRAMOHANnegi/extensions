@@ -17,6 +17,9 @@ interface PersonalInfo {
   github: string;
   authorizedToWork: string;
   requiresSponsorship: string;
+  notice: string;
+  salary: string;
+  coverLetter: string;
   customFields: CustomField[];
 }
 
@@ -58,6 +61,9 @@ const initialPersonal: PersonalInfo = {
   github: "",
   authorizedToWork: "yes",
   requiresSponsorship: "no",
+  notice: "",
+  salary: "",
+  coverLetter: "",
   customFields: [],
 };
 
@@ -529,6 +535,46 @@ export function Popup() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3.5 pt-1.5">
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-wider">
+                  Notice Period
+                </label>
+                <input
+                  type="text"
+                  value={personal.notice}
+                  onChange={(e) => handlePersonalChange("notice", e.target.value)}
+                  placeholder="Immediate / 30 Days"
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-400/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none transition"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-wider">
+                  Expected Salary
+                </label>
+                <input
+                  type="text"
+                  value={personal.salary}
+                  onChange={(e) => handlePersonalChange("salary", e.target.value)}
+                  placeholder="Negotiable / $120k"
+                  className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-400/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-600 outline-none transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 tracking-wider">
+                Cover Letter / Bio
+              </label>
+              <textarea
+                value={personal.coverLetter}
+                onChange={(e) => handlePersonalChange("coverLetter", e.target.value)}
+                placeholder="Write a brief cover letter or bio that will be injected into cover letter fields..."
+                rows={3}
+                className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-400/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-700 outline-none resize-none transition"
+              />
             </div>
           </div>
         )}

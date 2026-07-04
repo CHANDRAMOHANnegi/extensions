@@ -935,7 +935,7 @@ export function Popup() {
                 Security & Costs:
               </span>
               <p>
-                - The extension calls <b>Gemini 1.5 Flash</b> directly from your browser background process, keeping request transactions safe from web-page DOM scraping.
+                - The extension calls <b>Gemini 3.5 Flash</b> directly from your browser background process, keeping request transactions safe from web-page DOM scraping.
               </p>
               <p>
                 - Generates specific, context-appropriate responses under 150 words using only the resume text you pasted under the <b>Resume & Bio</b> tab.

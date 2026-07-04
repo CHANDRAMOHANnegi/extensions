@@ -6,12 +6,6 @@ settings:
 
 importers:
 
-  .:
-    devDependencies:
-      typescript:
-        specifier: ^5.4.5
-        version: 5.9.3
-
   apps/job-form-filler:
     dependencies:
       react:

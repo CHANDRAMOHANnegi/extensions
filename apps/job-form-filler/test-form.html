@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mock Job Application Form</title>
+  <!-- Outfit Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg: #090c15;
+      --card-bg: rgba(20, 26, 42, 0.6);
+      --border: rgba(223, 177, 88, 0.15);
+      --border-hover: rgba(223, 177, 88, 0.4);
+      --accent: #dfb158;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --input-bg: #111827;
+      --glow: rgba(223, 177, 88, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(223, 177, 88, 0.05) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.05) 0px, transparent 50%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 650px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 
+                  0 0 50px rgba(223, 177, 88, 0.03);
+      transition: border-color 0.3s ease;
+    }
+
+    .container:hover {
+      border-color: rgba(223, 177, 88, 0.25);
+    }
+
+    header {
+      margin-bottom: 32px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 32px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff 40%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .form-group-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    select,
+    textarea {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 15px;
+      padding: 12px 16px;
+      outline: none;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 12px var(--glow);
+      background: rgba(17, 24, 39, 0.8);
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    .checkbox-group, .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .checkbox-label, .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text);
+      cursor: pointer;
+      text-transform: none;
+      font-weight: 400;
+      letter-spacing: normal;
+    }
+
+    .checkbox-label input, .radio-label input {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent) 0%, #b88b33 100%);
+      color: #0c0b05;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(223, 177, 88, 0.2);
+    }
+
+    .btn-submit:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(223, 177, 88, 0.35);
+    }
+
+    .btn-submit:active {
+      transform: translateY(0);
+    }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Careers Portal</h1>
+      <p>Fill out the application form below or use your Smart Job Form Filler extension</p>
+    </header>
+
+    <form id="mock-job-form">
+      
+      <!-- Personal Details -->
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="fullName">Full Name</label>
+          <input type="text" id="fullName" name="name" placeholder="E.g., Jane Doe" required>
+        </div>
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" placeholder="E.g., jane.doe@example.com" required>
+        </div>
+      </div>
+
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="phone">Phone Number</label>
+          <input type="tel" id="phone" name="phone" placeholder="E.g., +1 (555) 123-4567" required>
+        </div>
+        <div class="form-group">
+          <label for="location">Current Location</label>
+          <input type="text" id="location" name="location" placeholder="E.g., San Francisco, CA" required>
+        </div>
+      </div>
+
+      <!-- Professional Background -->
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="currentTitle">Current Job Title</label>
+          <input type="text" id="currentTitle" name="title" placeholder="E.g., Software Engineer">
+        </div>
+        <div class="form-group">
+          <label for="company">Current Employer</label>
+          <input type="text" id="company" name="company" placeholder="E.g., Tech Corp">
+        </div>
+      </div>
+
+      <!-- Web Links -->
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="linkedin">LinkedIn Profile</label>
+          <input type="url" id="linkedin" name="linkedin" placeholder="https://linkedin.com/in/username">
+        </div>
+        <div class="form-group">
+          <label for="github">GitHub Profile</label>
+          <input type="url" id="github" name="github" placeholder="https://github.com/username">
+        </div>
+      </div>
+
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="portfolio">Portfolio Website</label>
+          <input type="url" id="portfolio" name="portfolio" placeholder="https://myportfolio.dev">
+        </div>
+        <div class="form-group">
+          <label for="resumeUrl">Resume URL (Hosted link)</label>
+          <input type="url" id="resumeUrl" name="resume" placeholder="https://drive.google.com/.../resume.pdf">
+        </div>
+      </div>
+
+      <!-- Experience & Salary details -->
+      <div class="form-group-row">
+        <div class="form-group">
+          <label for="years">Years of Experience</label>
+          <input type="text" id="years" name="experience" placeholder="E.g., 5">
+        </div>
+        <div class="form-group">
+          <label for="notice">Notice Period</label>
+          <select id="notice" name="notice_period">
+            <option value="">Select notice period</option>
+            <option value="immediate">Immediate / No Notice</option>
+            <option value="15-days">15 Days</option>
+            <option value="30-days">30 Days (1 Month)</option>
+            <option value="60-days">60 Days (2 Months)</option>
+            <option value="90-days">90 Days (3 Months)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Work Authorization Radio buttons -->
+      <div class="form-group">
+        <label>Are you authorized to work in the US?</label>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="work_auth_us" value="yes"> Yes, I am authorized
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="work_auth_us" value="no"> No, I require sponsorship
+          </label>
+        </div>
+      </div>
+
+      <!-- Consent / Checkbox fields -->
+      <div class="form-group">
+        <label>Work Authorization Preferences</label>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="require_sponsorship" value="yes">
+            I will require visa sponsorship in the future
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="agreed_to_background_check" value="yes">
+            I agree to undergo a standard background check
+          </label>
+        </div>
+      </div>
+
+      <!-- Professional Summary Textarea -->
+      <div class="form-group">
+        <label for="summary">Professional Summary / Bio</label>
+        <textarea id="summary" name="summary" rows="4" placeholder="Briefly describe your career background and key skills..."></textarea>
+      </div>
+
+      <button type="submit" class="btn-submit">Submit Application</button>
+    </form>
+
+    <div class="footer-note">
+      This form is a simulator for local extension testing. No data is sent or stored.
+    </div>
+  </div>
+
+</body>
+</html>

@@ -51,6 +51,24 @@ function setNativeValue(
   element.dispatchEvent(new Event("blur", { bubbles: true }));
 }
 
+// React-compatible checked injector for checkboxes and radio buttons
+function setNativeChecked(element: HTMLInputElement, checked: boolean) {
+  const checkedSetter = Object.getOwnPropertyDescriptor(element, "checked")?.set;
+  const prototype = Object.getPrototypeOf(element);
+  const prototypeCheckedSetter = Object.getOwnPropertyDescriptor(prototype, "checked")?.set;
+
+  if (prototypeCheckedSetter && checkedSetter !== prototypeCheckedSetter) {
+    prototypeCheckedSetter.call(element, checked);
+  } else if (checkedSetter) {
+    checkedSetter.call(element, checked);
+  } else {
+    element.checked = checked;
+  }
+
+  element.dispatchEvent(new Event("click", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 async function base64ToFile(base64: string, filename: string, mimeType: string): Promise<File> {
   const res = await fetch(base64);
   const blob = await res.blob();
@@ -277,6 +295,34 @@ async function fillForm(payload: any): Promise<{ filledCount: number; aiCount: n
           setNativeValue(el, matchedOption.value);
           triggerHighlight(el);
           filledCount++;
+        }
+      } else if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio")) {
+        const normalizedValue = valueToFill.toLowerCase().trim();
+        if (el.type === "checkbox") {
+          const shouldCheck = !["no", "false", "0", "none"].includes(normalizedValue);
+          if (el.checked !== shouldCheck) {
+            setNativeChecked(el, shouldCheck);
+            triggerHighlight(el);
+            filledCount++;
+          }
+        } else {
+          const radioValue = el.value.toLowerCase().trim();
+          const isYesRadio = radioValue === "yes" || radioValue === "true" || radioValue === "1";
+          const isNoRadio = radioValue === "no" || radioValue === "false" || radioValue === "0";
+
+          let shouldSelect = false;
+          if (isYesRadio || isNoRadio) {
+            const isPositiveValue = !["no", "false", "0", "none"].includes(normalizedValue);
+            shouldSelect = isYesRadio ? isPositiveValue : !isPositiveValue;
+          } else {
+            shouldSelect = normalizedValue.includes(radioValue) || radioValue.includes(normalizedValue);
+          }
+
+          if (shouldSelect && !el.checked) {
+            setNativeChecked(el, true);
+            triggerHighlight(el);
+            filledCount++;
+          }
         }
       } else {
         setNativeValue(el, valueToFill);

@@ -2,6 +2,8 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log("Smart Job Form Filler with Gemini AI Installed");
 });
 
+const GEMINI_MODEL = "gemini-1.5-flash";
+
 // Relays Gemini API requests to bypass Page Content Security Policy (CSP)
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "CALL_GEMINI") {
@@ -12,7 +14,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
     fetch(endpoint, {
       method: "POST",
@@ -60,7 +62,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return true;
     }
 
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
     const rawBase64 = base64.split(",")[1];
 
     fetch(endpoint, {
@@ -74,12 +76,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             parts: [
               {
                 inlineData: {
-                  mimeType: mimeType,
+                  mimeType: mimeType || "application/octet-stream",
                   data: rawBase64,
                 },
               },
               {
-                text: "Extract all candidate profile details from this resume. You must return a single valid JSON object matching the schema exactly: { personal: { firstName, lastName, email, phone, city, country, website, linkedin, github }, education: { school, degree, major, gradYear }, experience: { company, title, startYear, endYear, isCurrent, description }, resumeText }. Ensure notice, salary, and coverLetter fields are initialized as empty strings in personal. Return ONLY the JSON object. Do not wrap in markdown tag fences or add any other text.",
+                text: "Extract candidate profile details from this resume. Return ONLY one valid JSON object with this exact shape: { \"personal\": { \"firstName\": \"\", \"lastName\": \"\", \"email\": \"\", \"phone\": \"\", \"city\": \"\", \"country\": \"\", \"website\": \"\", \"linkedin\": \"\", \"github\": \"\" }, \"education\": { \"school\": \"\", \"degree\": \"\", \"major\": \"\", \"gradMonth\": \"\", \"gradYear\": \"\" }, \"experience\": { \"company\": \"\", \"title\": \"\", \"startMonth\": \"\", \"startYear\": \"\", \"endMonth\": \"\", \"endYear\": \"\", \"isCurrent\": false, \"description\": \"\" }, \"resumeText\": \"\" }. Use empty strings for unknown fields. Keep resumeText as concise plain text containing skills, education, and work history. Do not wrap in markdown fences or add commentary.",
               },
             ],
           },

@@ -49,6 +49,24 @@ interface ResumeInfo {
   type: string;
 }
 
+interface ParsedResumeData {
+  personal?: Partial<PersonalInfo> & {
+    fullName?: string;
+    name?: string;
+  };
+  education?: Partial<EducationInfo> & {
+    graduationYear?: string;
+    graduationDate?: string;
+    fieldOfStudy?: string;
+  };
+  experience?: Partial<ExperienceInfo> & {
+    jobTitle?: string;
+    currentTitle?: string;
+    currentCompany?: string;
+  };
+  resumeText?: string;
+}
+
 const initialPersonal: PersonalInfo = {
   firstName: "",
   lastName: "",
@@ -84,6 +102,133 @@ const initialExperience: ExperienceInfo = {
   endYear: "",
   isCurrent: false,
   description: "",
+};
+
+const cleanJsonResponse = (value: string) => {
+  let cleaned = value.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
+  }
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+
+  return cleaned;
+};
+
+const stringValue = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+const compactPatch = <T extends Record<string, any>>(value: Partial<T> | undefined): Partial<T> => {
+  if (!value) return {};
+
+  return Object.entries(value).reduce<Partial<T>>((result, [key, rawValue]) => {
+    if (typeof rawValue === "boolean") {
+      result[key as keyof T] = rawValue as T[keyof T];
+    } else if (typeof rawValue === "string" && rawValue.trim()) {
+      result[key as keyof T] = rawValue.trim() as T[keyof T];
+    }
+    return result;
+  }, {});
+};
+
+const splitFullName = (fullName: string) => {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { firstName: parts[0] };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+};
+
+const readPlainTextResume = async (file: File) => {
+  const lowerName = file.name.toLowerCase();
+  const isPlainText =
+    file.type.startsWith("text/") ||
+    lowerName.endsWith(".txt") ||
+    lowerName.endsWith(".md") ||
+    lowerName.endsWith(".rtf");
+
+  return isPlainText ? file.text() : "";
+};
+
+const parseResumeTextLocally = (text: string): ParsedResumeData | null => {
+  const cleaned = text.replace(/\r/g, "").trim();
+  if (!cleaned) return null;
+
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const email = cleaned.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] || "";
+  const phone = cleaned.match(/(?:\+?\d[\d\s().-]{7,}\d)/)?.[0]?.replace(/\s+/g, " ").trim() || "";
+  const urls = cleaned.match(/https?:\/\/[^\s),]+/gi) || [];
+  const linkedin = urls.find((url) => /linkedin\.com/i.test(url)) || "";
+  const github = urls.find((url) => /github\.com/i.test(url)) || "";
+  const website = urls.find((url) => !/linkedin\.com|github\.com/i.test(url)) || "";
+  const location = cleaned.match(/(?:location|address|city)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const [city = "", country = ""] = location.split(",").map((part) => part.trim());
+
+  const nameLine = lines.find((line) => {
+    const lower = line.toLowerCase();
+    return (
+      line.length <= 80 &&
+      /^[a-z][a-z\s.'-]+$/i.test(line) &&
+      !lower.includes("resume") &&
+      !lower.includes("curriculum") &&
+      !lower.includes("email") &&
+      !lower.includes("phone") &&
+      !lower.includes("linkedin") &&
+      !lower.includes("github")
+    );
+  });
+
+  const degree = cleaned.match(/\b(b\.?tech|m\.?tech|b\.?e\.?|m\.?e\.?|b\.?s\.?|m\.?s\.?|bachelor(?:'s)?|master(?:'s)?|ph\.?d\.?|mba)\b[^,\n]*/i)?.[0] || "";
+  const gradYear = cleaned.match(/(?:graduat(?:ed|ion)|class of|passing year)\D*(20\d{2}|19\d{2})/i)?.[1] || "";
+  const school =
+    cleaned.match(/(?:university|college|institute|school)\s*[:|-]?\s*([^\n]+)/i)?.[1]?.trim() ||
+    lines.find((line) => /\b(university|college|institute|school)\b/i.test(line)) ||
+    "";
+  const major = cleaned.match(/(?:major|field of study|specialization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
+
+  const title =
+    cleaned.match(/(?:software|frontend|front-end|backend|back-end|full stack|full-stack|mobile|devops|data|machine learning|ai)\s+(?:engineer|developer|architect|scientist)/i)?.[0] ||
+    cleaned.match(/(?:current title|title|role)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() ||
+    "";
+  const company = cleaned.match(/(?:company|employer|organization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const years = cleaned.match(/\b(20\d{2}|19\d{2})\s*[-–]\s*(present|current|20\d{2}|19\d{2})\b/i);
+
+  return {
+    personal: {
+      ...splitFullName(nameLine || ""),
+      email,
+      phone,
+      city,
+      country,
+      linkedin,
+      github,
+      website,
+    },
+    education: {
+      school,
+      degree,
+      major,
+      gradYear,
+    },
+    experience: {
+      company,
+      title,
+      startYear: years?.[1] || "",
+      endYear: years?.[2] && !/present|current/i.test(years[2]) ? years[2] : "",
+      isCurrent: Boolean(years?.[2] && /present|current/i.test(years[2])),
+      description: lines.slice(0, 16).join("\n"),
+    },
+    resumeText: cleaned,
+  };
 };
 
 export function Popup() {
@@ -189,6 +334,63 @@ export function Popup() {
     saveToStorage("jobFiller_resumeText", val);
   };
 
+  const applyParsedResumeData = (parsed: ParsedResumeData, source: "Gemini AI" | "text resume") => {
+    const parsedPersonal = parsed.personal || {};
+    const fullName = stringValue(parsedPersonal.fullName) || stringValue(parsedPersonal.name);
+    const nameParts = fullName ? splitFullName(fullName) : {};
+    const personalPatch = compactPatch<PersonalInfo>({
+      ...parsedPersonal,
+      ...nameParts,
+    });
+
+    const parsedEducation = parsed.education || {};
+    const educationPatch = compactPatch<EducationInfo>({
+      ...parsedEducation,
+      major: parsedEducation.major || parsedEducation.fieldOfStudy,
+      gradYear: parsedEducation.gradYear || parsedEducation.graduationYear || parsedEducation.graduationDate,
+    });
+
+    const parsedExperience = parsed.experience || {};
+    const experiencePatch = compactPatch<ExperienceInfo>({
+      ...parsedExperience,
+      company: parsedExperience.company || parsedExperience.currentCompany,
+      title: parsedExperience.title || parsedExperience.jobTitle || parsedExperience.currentTitle,
+    });
+
+    if (Object.keys(personalPatch).length > 0) {
+      const updatedPersonal = {
+        ...personal,
+        ...personalPatch,
+        notice: personal.notice,
+        salary: personal.salary,
+        coverLetter: personal.coverLetter,
+        customFields: personal.customFields,
+      };
+      setPersonal(updatedPersonal);
+      saveToStorage("jobFiller_personal", updatedPersonal);
+    }
+
+    if (Object.keys(educationPatch).length > 0) {
+      const updatedEducation = { ...education, ...educationPatch };
+      setEducation(updatedEducation);
+      saveToStorage("jobFiller_education", updatedEducation);
+    }
+
+    if (Object.keys(experiencePatch).length > 0) {
+      const updatedExperience = { ...experience, ...experiencePatch };
+      setExperience(updatedExperience);
+      saveToStorage("jobFiller_experience", updatedExperience);
+    }
+
+    if (parsed.resumeText?.trim()) {
+      setResumeText(parsed.resumeText.trim());
+      saveToStorage("jobFiller_resumeText", parsed.resumeText.trim());
+    }
+
+    setActiveTab("personal");
+    setFillStatus({ type: "success", message: `Resume uploaded and details parsed with ${source}.` });
+  };
+
   // Custom Fields Actions
   const addCustomField = () => {
     if (!newKey.trim()) return;
@@ -218,7 +420,7 @@ export function Popup() {
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const base64 = event.target?.result as string;
       const fileData: ResumeInfo = {
         base64,
@@ -228,6 +430,8 @@ export function Popup() {
       };
       setResume(fileData);
       saveToStorage("jobFiller_resume", fileData);
+
+      const plainText = await readPlainTextResume(file);
 
       if (geminiApiKey.trim()) {
         setIsParsingResume(true);
@@ -255,53 +459,37 @@ export function Popup() {
             }
             if (response && response.success) {
               try {
-                let cleanedJson = response.text.trim();
-                if (cleanedJson.startsWith("```")) {
-                  cleanedJson = cleanedJson.replace(/^```json\s*|```$/gi, "").trim();
-                }
+                const cleanedJson = cleanJsonResponse(response.text);
                 const parsed = JSON.parse(cleanedJson);
-                
-                if (parsed.personal) {
-                  const updatedPersonal = { 
-                    ...personal, 
-                    ...parsed.personal, 
-                    notice: personal.notice,
-                    salary: personal.salary,
-                    coverLetter: personal.coverLetter,
-                    customFields: personal.customFields 
-                  };
-                  setPersonal(updatedPersonal);
-                  saveToStorage("jobFiller_personal", updatedPersonal);
-                }
-                if (parsed.education) {
-                  const updatedEducation = { ...education, ...parsed.education };
-                  setEducation(updatedEducation);
-                  saveToStorage("jobFiller_education", updatedEducation);
-                }
-                if (parsed.experience) {
-                  const updatedExperience = { ...experience, ...parsed.experience };
-                  setExperience(updatedExperience);
-                  saveToStorage("jobFiller_experience", updatedExperience);
-                }
-                if (parsed.resumeText) {
-                  setResumeText(parsed.resumeText);
-                  saveToStorage("jobFiller_resumeText", parsed.resumeText);
-                }
-                
-                setFillStatus({ type: "success", message: "Resume uploaded and profile parsed successfully!" });
+                applyParsedResumeData(parsed, "Gemini AI");
               } catch (e) {
                 console.error("Failed to parse resume JSON response:", e);
-                setFillStatus({ type: "success", message: "Resume uploaded, but failed to auto-extract text fields." });
+                const localParsed = parseResumeTextLocally(plainText);
+                if (localParsed) {
+                  applyParsedResumeData(localParsed, "text resume");
+                } else {
+                  setFillStatus({ type: "success", message: "Resume uploaded, but details could not be extracted." });
+                }
               }
             } else {
               console.error("Gemini parse failed:", response?.error);
-              setFillStatus({ type: "success", message: "Resume uploaded. (Extraction failed: " + (response?.error || "Unknown error") + ")" });
+              const localParsed = parseResumeTextLocally(plainText);
+              if (localParsed) {
+                applyParsedResumeData(localParsed, "text resume");
+              } else {
+                setFillStatus({ type: "success", message: "Resume uploaded. Extraction failed: " + (response?.error || "Unknown error") });
+              }
             }
             setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
           }
         );
       } else {
-        setFillStatus({ type: "success", message: "Resume uploaded! (Add a Gemini API key under Settings to auto-extract details)." });
+        const localParsed = parseResumeTextLocally(plainText);
+        if (localParsed) {
+          applyParsedResumeData(localParsed, "text resume");
+        } else {
+          setFillStatus({ type: "success", message: "Resume uploaded. Add a Gemini API key under Settings to auto-extract PDF/DOCX details." });
+        }
         setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
       }
     };
@@ -864,14 +1052,14 @@ export function Popup() {
               <div className="relative group border-2 border-dashed border-slate-800 hover:border-cyan-500/50 bg-slate-900/20 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition duration-300">
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf,.doc,.docx,.txt,.md,.rtf"
                   disabled={isParsingResume}
                   onChange={handleResumeUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
                 <span className="text-2xl mb-2">📤</span>
                 <p className="text-xs font-bold text-slate-300">Drag & drop resume here</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">PDF, DOCX (up to 8MB)</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">PDF, DOCX, TXT (up to 8MB)</p>
               </div>
             )}
 

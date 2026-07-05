@@ -122,9 +122,25 @@ export function Popup() {
           "jobFiller_resumeText",
         ],
         (result: { [key: string]: any }) => {
-          if (result.jobFiller_personal) setPersonal(result.jobFiller_personal);
-          if (result.jobFiller_education) setEducation(result.jobFiller_education);
-          if (result.jobFiller_experience) setExperience(result.jobFiller_experience);
+          if (result.jobFiller_personal) {
+            setPersonal({
+              ...initialPersonal,
+              ...result.jobFiller_personal,
+              customFields: result.jobFiller_personal.customFields || [],
+            });
+          }
+          if (result.jobFiller_education) {
+            setEducation({
+              ...initialEducation,
+              ...result.jobFiller_education,
+            });
+          }
+          if (result.jobFiller_experience) {
+            setExperience({
+              ...initialExperience,
+              ...result.jobFiller_experience,
+            });
+          }
           if (result.jobFiller_resume) setResume(result.jobFiller_resume);
           if (result.jobFiller_geminiApiKey) setGeminiApiKey(result.jobFiller_geminiApiKey);
           if (result.jobFiller_resumeText) setResumeText(result.jobFiller_resumeText);
@@ -228,6 +244,15 @@ export function Popup() {
           },
           (response) => {
             setIsParsingResume(false);
+            if (chrome.runtime.lastError) {
+              console.error("PARSE_RESUME message failed:", chrome.runtime.lastError);
+              setFillStatus({
+                type: "error",
+                message: "Connection failed: " + (chrome.runtime.lastError.message || "Unknown error"),
+              });
+              setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
+              return;
+            }
             if (response && response.success) {
               try {
                 let cleanedJson = response.text.trim();

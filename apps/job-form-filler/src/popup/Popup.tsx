@@ -97,6 +97,7 @@ export function Popup() {
   const [geminiApiKey, setGeminiApiKey] = useState<string>("");
   const [showApiKey, setShowApiKey] = useState<boolean>(false);
   const [resumeText, setResumeText] = useState<string>("");
+  const [isParsingResume, setIsParsingResume] = useState<boolean>(false);
 
   const [saveStatus, setSaveStatus] = useState<string>("");
   const [fillStatus, setFillStatus] = useState<{ type: "success" | "error" | "info" | ""; message: string }>({
@@ -211,8 +212,73 @@ export function Popup() {
       };
       setResume(fileData);
       saveToStorage("jobFiller_resume", fileData);
-      setFillStatus({ type: "success", message: "Resume uploaded successfully!" });
-      setTimeout(() => setFillStatus({ type: "", message: "" }), 3000);
+
+      if (geminiApiKey.trim()) {
+        setIsParsingResume(true);
+        setFillStatus({ type: "info", message: "Gemini AI is parsing your resume details..." });
+        
+        chrome.runtime.sendMessage(
+          {
+            type: "PARSE_RESUME",
+            payload: {
+              apiKey: geminiApiKey,
+              base64: base64,
+              mimeType: file.type
+            }
+          },
+          (response) => {
+            setIsParsingResume(false);
+            if (response && response.success) {
+              try {
+                let cleanedJson = response.text.trim();
+                if (cleanedJson.startsWith("```")) {
+                  cleanedJson = cleanedJson.replace(/^```json\s*|```$/gi, "").trim();
+                }
+                const parsed = JSON.parse(cleanedJson);
+                
+                if (parsed.personal) {
+                  const updatedPersonal = { 
+                    ...personal, 
+                    ...parsed.personal, 
+                    notice: personal.notice,
+                    salary: personal.salary,
+                    coverLetter: personal.coverLetter,
+                    customFields: personal.customFields 
+                  };
+                  setPersonal(updatedPersonal);
+                  saveToStorage("jobFiller_personal", updatedPersonal);
+                }
+                if (parsed.education) {
+                  const updatedEducation = { ...education, ...parsed.education };
+                  setEducation(updatedEducation);
+                  saveToStorage("jobFiller_education", updatedEducation);
+                }
+                if (parsed.experience) {
+                  const updatedExperience = { ...experience, ...parsed.experience };
+                  setExperience(updatedExperience);
+                  saveToStorage("jobFiller_experience", updatedExperience);
+                }
+                if (parsed.resumeText) {
+                  setResumeText(parsed.resumeText);
+                  saveToStorage("jobFiller_resumeText", parsed.resumeText);
+                }
+                
+                setFillStatus({ type: "success", message: "Resume uploaded and profile parsed successfully!" });
+              } catch (e) {
+                console.error("Failed to parse resume JSON response:", e);
+                setFillStatus({ type: "success", message: "Resume uploaded, but failed to auto-extract text fields." });
+              }
+            } else {
+              console.error("Gemini parse failed:", response?.error);
+              setFillStatus({ type: "success", message: "Resume uploaded. (Extraction failed: " + (response?.error || "Unknown error") + ")" });
+            }
+            setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
+          }
+        );
+      } else {
+        setFillStatus({ type: "success", message: "Resume uploaded! (Add a Gemini API key under Settings to auto-extract details)." });
+        setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -763,11 +829,18 @@ export function Popup() {
                   <span className="text-xs">🗑️</span>
                 </button>
               </div>
+            ) : isParsingResume ? (
+              <div className="border-2 border-dashed border-cyan-500/50 bg-slate-900/40 rounded-xl p-6 flex flex-col items-center justify-center text-center">
+                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin mb-3"></div>
+                <p className="text-xs font-bold text-cyan-400">Gemini AI is parsing details...</p>
+                <p className="text-[10px] text-slate-500 mt-1">Extracting personal details, education, & history</p>
+              </div>
             ) : (
               <div className="relative group border-2 border-dashed border-slate-800 hover:border-cyan-500/50 bg-slate-900/20 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition duration-300">
                 <input
                   type="file"
                   accept=".pdf,.doc,.docx"
+                  disabled={isParsingResume}
                   onChange={handleResumeUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />

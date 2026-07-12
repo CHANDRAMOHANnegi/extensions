@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface CustomField {
   key: string;
@@ -49,6 +49,15 @@ interface ResumeInfo {
   type: string;
 }
 
+interface ParseSummary {
+  source: string;
+  savedAt: string;
+  personalCount: number;
+  educationCount: number;
+  workCount: number;
+  resumeTextLength: number;
+}
+
 interface ParsedResumeData {
   personal?: Partial<PersonalInfo> & {
     fullName?: string;
@@ -66,6 +75,8 @@ interface ParsedResumeData {
   };
   resumeText?: string;
 }
+
+type ResumeJson = Record<string, any>;
 
 const initialPersonal: PersonalInfo = {
   firstName: "",
@@ -121,6 +132,57 @@ const cleanJsonResponse = (value: string) => {
 
 const stringValue = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
+const firstObject = (value: unknown): ResumeJson => {
+  if (Array.isArray(value)) {
+    return firstObject(value[0]);
+  }
+
+  return value && typeof value === "object" ? (value as ResumeJson) : {};
+};
+
+const hasKeys = (value: ResumeJson) => Object.keys(value).length > 0;
+
+const firstNonEmptyObject = (...values: unknown[]): ResumeJson => {
+  for (const value of values) {
+    const object = firstObject(value);
+    if (hasKeys(object)) {
+      return object;
+    }
+  }
+
+  return {};
+};
+
+const firstString = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+};
+
+const firstBoolean = (...values: unknown[]) => {
+  for (const value of values) {
+    if (typeof value === "boolean") {
+      return value;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["present", "current", "true", "yes"].includes(normalized)) return true;
+      if (["false", "no"].includes(normalized)) return false;
+    }
+  }
+
+  return undefined;
+};
+
+const extractYear = (...values: unknown[]) => {
+  const value = firstString(...values);
+  return value.match(/\b(19\d{2}|20\d{2})\b/)?.[1] || value;
+};
+
 const compactPatch = <T extends Record<string, any>>(value: Partial<T> | undefined): Partial<T> => {
   if (!value) return {};
 
@@ -141,6 +203,136 @@ const splitFullName = (fullName: string) => {
   return {
     firstName: parts[0],
     lastName: parts.slice(1).join(" "),
+  };
+};
+
+const normalizeParsedResumeData = (parsed: unknown): ParsedResumeData => {
+  const root = firstObject(parsed);
+  const candidate = firstNonEmptyObject(
+    root.candidate,
+    root.candidateProfile,
+    root.candidate_profile,
+    root.profile,
+    root.data,
+    root.result,
+    root
+  );
+  const personalSource = firstNonEmptyObject(
+    candidate.personal,
+    candidate.personalInfo,
+    candidate.personal_info,
+    candidate.personalDetails,
+    candidate.personal_details,
+    candidate.contact,
+    candidate.contactInfo,
+    candidate.contact_info,
+    candidate.contactInformation,
+    candidate.contact_information,
+    candidate.basics,
+    root.personal,
+    root.personalInfo,
+    root.personal_info,
+    root.personalDetails,
+    root.personal_details,
+    root.contact,
+    root.contactInfo,
+    root.contact_info,
+    root.contactInformation,
+    root.contact_information,
+    root.basics,
+    candidate
+  );
+  const educationSource = firstNonEmptyObject(
+    candidate.education,
+    candidate.educationInfo,
+    candidate.education_info,
+    candidate.educations,
+    candidate.educationalBackground,
+    candidate.educational_background,
+    candidate.academicBackground,
+    candidate.academic_background,
+    root.education,
+    root.educationInfo,
+    root.education_info,
+    root.educations,
+    root.educationalBackground,
+    root.educational_background,
+    root.academicBackground,
+    root.academic_background
+  );
+  const experienceSource = firstNonEmptyObject(
+    candidate.experience,
+    candidate.workExperience,
+    candidate.work_experience,
+    candidate.professionalExperience,
+    candidate.professional_experience,
+    candidate.work,
+    candidate.employment,
+    candidate.employmentHistory,
+    candidate.employment_history,
+    candidate.experiences,
+    root.experience,
+    root.workExperience,
+    root.work_experience,
+    root.professionalExperience,
+    root.professional_experience,
+    root.work,
+    root.employment,
+    root.employmentHistory,
+    root.employment_history,
+    root.experiences
+  );
+
+  const fullName = firstString(
+    personalSource.fullName,
+    personalSource.full_name,
+    personalSource.name,
+    personalSource.candidateName,
+    personalSource.candidate_name,
+    candidate.fullName,
+    candidate.full_name,
+    candidate.name
+  );
+  const nameParts = splitFullName(fullName);
+  const links = Array.isArray(personalSource.links) ? personalSource.links : [];
+  const linkedinLink = links.find((link) => typeof link === "string" && /linkedin\.com/i.test(link));
+  const githubLink = links.find((link) => typeof link === "string" && /github\.com/i.test(link));
+  const location = firstString(personalSource.location, personalSource.address, candidate.location);
+  const [locationCity = "", locationCountry = ""] =
+    typeof location === "string" ? location.split(",").map((part) => part.trim()) : [];
+
+  return {
+    personal: {
+      firstName: firstString(personalSource.firstName, personalSource.first_name, personalSource.givenName, personalSource.given_name, nameParts.firstName),
+      lastName: firstString(personalSource.lastName, personalSource.last_name, personalSource.familyName, personalSource.family_name, personalSource.surname, nameParts.lastName),
+      email: firstString(personalSource.email, personalSource.emailAddress, personalSource.email_address, candidate.email),
+      phone: firstString(personalSource.phone, personalSource.phoneNumber, personalSource.phone_number, personalSource.mobile, candidate.phone),
+      city: firstString(personalSource.city, personalSource.location?.city, candidate.city, locationCity),
+      country: firstString(personalSource.country, personalSource.location?.country, candidate.country, locationCountry),
+      website: firstString(personalSource.website, personalSource.personalWebsite, personalSource.personal_website, personalSource.portfolio, personalSource.portfolioUrl, personalSource.portfolio_url, candidate.website),
+      linkedin: firstString(personalSource.linkedin, personalSource.linkedIn, personalSource.linked_in, personalSource.linkedinUrl, personalSource.linkedin_url, linkedinLink),
+      github: firstString(personalSource.github, personalSource.githubUrl, personalSource.github_url, githubLink),
+    },
+    education: {
+      school: firstString(educationSource.school, educationSource.university, educationSource.college, educationSource.institution, educationSource.institutionName, educationSource.institution_name, educationSource.schoolName, educationSource.school_name, educationSource.universityName, educationSource.university_name),
+      degree: firstString(educationSource.degree, educationSource.qualification),
+      major: firstString(educationSource.major, educationSource.fieldOfStudy, educationSource.field_of_study, educationSource.specialization, educationSource.discipline),
+      gradMonth: firstString(educationSource.gradMonth, educationSource.grad_month, educationSource.graduationMonth, educationSource.graduation_month),
+      gradYear: extractYear(educationSource.gradYear, educationSource.grad_year, educationSource.graduationYear, educationSource.graduation_year, educationSource.graduationDate, educationSource.graduation_date, educationSource.endYear, educationSource.end_year),
+    },
+    experience: {
+      company: firstString(experienceSource.company, experienceSource.companyName, experienceSource.company_name, experienceSource.currentCompany, experienceSource.current_company, experienceSource.employer, experienceSource.employerName, experienceSource.employer_name, experienceSource.organization),
+      title: firstString(experienceSource.title, experienceSource.jobTitle, experienceSource.job_title, experienceSource.currentTitle, experienceSource.current_title, experienceSource.role, experienceSource.position, experienceSource.positionTitle, experienceSource.position_title),
+      startMonth: firstString(experienceSource.startMonth, experienceSource.start_month),
+      startYear: extractYear(experienceSource.startYear, experienceSource.start_year, experienceSource.startDate, experienceSource.start_date),
+      endMonth: firstString(experienceSource.endMonth, experienceSource.end_month),
+      endYear: extractYear(experienceSource.endYear, experienceSource.end_year, experienceSource.endDate, experienceSource.end_date),
+      ...(firstBoolean(experienceSource.isCurrent, experienceSource.is_current, experienceSource.current, experienceSource.endDate, experienceSource.end_date) !== undefined
+        ? { isCurrent: firstBoolean(experienceSource.isCurrent, experienceSource.is_current, experienceSource.current, experienceSource.endDate, experienceSource.end_date) }
+        : {}),
+      description: firstString(experienceSource.description, experienceSource.summary, experienceSource.responsibilities, experienceSource.roleSummary, experienceSource.role_summary),
+    },
+    resumeText: firstString(root.resumeText, root.resume_text, candidate.resumeText, candidate.resume_text, root.rawText, root.raw_text, candidate.rawText, candidate.raw_text, root.summary),
   };
 };
 
@@ -237,6 +429,7 @@ export function Popup() {
   const [education, setEducation] = useState<EducationInfo>(initialEducation);
   const [experience, setExperience] = useState<ExperienceInfo>(initialExperience);
   const [resume, setResume] = useState<ResumeInfo | null>(null);
+  const [parseSummary, setParseSummary] = useState<ParseSummary | null>(null);
 
   // Gemini AI States
   const [geminiApiKey, setGeminiApiKey] = useState<string>("");
@@ -254,6 +447,40 @@ export function Popup() {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
 
+  // Quota retry state: countdown seconds remaining (0 = idle)
+  const [quotaRetryCountdown, setQuotaRetryCountdown] = useState(0);
+  // Stores the action to replay when countdown hits 0
+  const quotaRetryAction = useRef<(() => void) | null>(null);
+
+  // Countdown ticker — auto-retries when it reaches 0
+  useEffect(() => {
+    if (quotaRetryCountdown <= 0) return;
+    if (quotaRetryCountdown === 1) {
+      setQuotaRetryCountdown(0);
+      const action = quotaRetryAction.current;
+      quotaRetryAction.current = null;
+      if (action) action();
+      return;
+    }
+    const timer = setTimeout(() => setQuotaRetryCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [quotaRetryCountdown]);
+
+  const startQuotaRetry = useCallback((action: () => void, seconds = 60) => {
+    quotaRetryAction.current = action;
+    setQuotaRetryCountdown(seconds);
+    setFillStatus({
+      type: "info",
+      message: `Rate limited — retrying in ${seconds}s... (all free-tier models are busy)`,
+    });
+  }, []);
+
+  const cancelQuotaRetry = () => {
+    quotaRetryAction.current = null;
+    setQuotaRetryCountdown(0);
+    setFillStatus({ type: "", message: "" });
+  };
+
   // Load from Storage
   useEffect(() => {
     if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
@@ -263,6 +490,7 @@ export function Popup() {
           "jobFiller_education",
           "jobFiller_experience",
           "jobFiller_resume",
+          "jobFiller_lastParsedResume",
           "jobFiller_geminiApiKey",
           "jobFiller_resumeText",
         ],
@@ -287,6 +515,7 @@ export function Popup() {
             });
           }
           if (result.jobFiller_resume) setResume(result.jobFiller_resume);
+          if (result.jobFiller_lastParsedResume?.summary) setParseSummary(result.jobFiller_lastParsedResume.summary);
           if (result.jobFiller_geminiApiKey) setGeminiApiKey(result.jobFiller_geminiApiKey);
           if (result.jobFiller_resumeText) setResumeText(result.jobFiller_resumeText);
         }
@@ -335,7 +564,8 @@ export function Popup() {
   };
 
   const applyParsedResumeData = (parsed: ParsedResumeData, source: "Gemini AI" | "text resume") => {
-    const parsedPersonal = parsed.personal || {};
+    const normalized = normalizeParsedResumeData(parsed);
+    const parsedPersonal = normalized.personal || {};
     const fullName = stringValue(parsedPersonal.fullName) || stringValue(parsedPersonal.name);
     const nameParts = fullName ? splitFullName(fullName) : {};
     const personalPatch = compactPatch<PersonalInfo>({
@@ -343,52 +573,85 @@ export function Popup() {
       ...nameParts,
     });
 
-    const parsedEducation = parsed.education || {};
+    const parsedEducation = normalized.education || {};
     const educationPatch = compactPatch<EducationInfo>({
       ...parsedEducation,
       major: parsedEducation.major || parsedEducation.fieldOfStudy,
       gradYear: parsedEducation.gradYear || parsedEducation.graduationYear || parsedEducation.graduationDate,
     });
 
-    const parsedExperience = parsed.experience || {};
+    const parsedExperience = normalized.experience || {};
     const experiencePatch = compactPatch<ExperienceInfo>({
       ...parsedExperience,
       company: parsedExperience.company || parsedExperience.currentCompany,
       title: parsedExperience.title || parsedExperience.jobTitle || parsedExperience.currentTitle,
     });
 
+    // Compute and apply each patch — functional updater reads latest prev state,
+    // then we save the exact value that was returned (no stale closure).
     if (Object.keys(personalPatch).length > 0) {
-      const updatedPersonal = {
-        ...personal,
-        ...personalPatch,
-        notice: personal.notice,
-        salary: personal.salary,
-        coverLetter: personal.coverLetter,
-        customFields: personal.customFields,
-      };
-      setPersonal(updatedPersonal);
-      saveToStorage("jobFiller_personal", updatedPersonal);
+      setPersonal((prev) => {
+        const next = {
+          ...prev,
+          ...personalPatch,
+          // Preserve fields that should never be overwritten by resume data
+          notice: prev.notice,
+          salary: prev.salary,
+          coverLetter: prev.coverLetter,
+          customFields: prev.customFields,
+        };
+        // Schedule the storage write after React commits the update
+        setTimeout(() => saveToStorage("jobFiller_personal", next), 0);
+        return next;
+      });
     }
 
     if (Object.keys(educationPatch).length > 0) {
-      const updatedEducation = { ...education, ...educationPatch };
-      setEducation(updatedEducation);
-      saveToStorage("jobFiller_education", updatedEducation);
+      setEducation((prev) => {
+        const next = { ...prev, ...educationPatch };
+        setTimeout(() => saveToStorage("jobFiller_education", next), 0);
+        return next;
+      });
     }
 
     if (Object.keys(experiencePatch).length > 0) {
-      const updatedExperience = { ...experience, ...experiencePatch };
-      setExperience(updatedExperience);
-      saveToStorage("jobFiller_experience", updatedExperience);
+      setExperience((prev) => {
+        const next = { ...prev, ...experiencePatch };
+        setTimeout(() => saveToStorage("jobFiller_experience", next), 0);
+        return next;
+      });
     }
 
-    if (parsed.resumeText?.trim()) {
-      setResumeText(parsed.resumeText.trim());
-      saveToStorage("jobFiller_resumeText", parsed.resumeText.trim());
+    if (normalized.resumeText?.trim()) {
+      setResumeText(normalized.resumeText.trim());
+      saveToStorage("jobFiller_resumeText", normalized.resumeText.trim());
     }
 
     setActiveTab("personal");
-    setFillStatus({ type: "success", message: `Resume uploaded and details parsed with ${source}.` });
+    const summary: ParseSummary = {
+      source,
+      savedAt: new Date().toISOString(),
+      personalCount: Object.keys(personalPatch).length,
+      educationCount: Object.keys(educationPatch).length,
+      workCount: Object.keys(experiencePatch).length,
+      resumeTextLength: normalized.resumeText?.trim().length || 0,
+    };
+    setParseSummary(summary);
+    saveToStorage("jobFiller_lastParsedResume", { source, parsed, normalized, summary });
+
+    const updatedSections = [
+      Object.keys(personalPatch).length > 0 ? "personal" : "",
+      Object.keys(educationPatch).length > 0 ? "education" : "",
+      Object.keys(experiencePatch).length > 0 ? "work" : "",
+    ].filter(Boolean);
+
+    setFillStatus({
+      type: updatedSections.length > 0 ? "success" : "error",
+      message:
+        updatedSections.length > 0
+          ? `Resume uploaded and updated ${updatedSections.join(", ")} details with ${source}.`
+          : "Resume uploaded, but no profile fields were found in the parsed data.",
+    });
   };
 
   // Custom Fields Actions
@@ -433,18 +696,30 @@ export function Popup() {
 
       const plainText = await readPlainTextResume(file);
 
-      if (geminiApiKey.trim()) {
+      // Read the API key fresh from storage to avoid stale closure capturing
+      // an empty key that was loaded after the initial render.
+      const freshApiKey = await new Promise<string>((resolve) => {
+        if (typeof chrome !== "undefined" && chrome.storage?.local) {
+          chrome.storage.local.get("jobFiller_geminiApiKey", (r) => {
+            resolve(String(r.jobFiller_geminiApiKey || "").trim());
+          });
+        } else {
+          resolve(geminiApiKey.trim());
+        }
+      });
+
+      if (freshApiKey) {
         setIsParsingResume(true);
         setFillStatus({ type: "info", message: "Gemini AI is parsing your resume details..." });
-        
+
         chrome.runtime.sendMessage(
           {
             type: "PARSE_RESUME",
             payload: {
-              apiKey: geminiApiKey,
+              apiKey: freshApiKey,
               base64: base64,
-              mimeType: file.type
-            }
+              mimeType: file.type,
+            },
           },
           (response) => {
             setIsParsingResume(false);
@@ -473,11 +748,22 @@ export function Popup() {
               }
             } else {
               console.error("Gemini parse failed:", response?.error);
-              const localParsed = parseResumeTextLocally(plainText);
-              if (localParsed) {
-                applyParsedResumeData(localParsed, "text resume");
+              const errMsg = response?.error || "Unknown error";
+              // If quota hit during resume parse, fall back to local text parse
+              if (/rate limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
+                const localParsed = parseResumeTextLocally(plainText);
+                if (localParsed) {
+                  applyParsedResumeData(localParsed, "text resume");
+                } else {
+                  setFillStatus({ type: "error", message: "Rate limited. Wait 60s and re-upload your resume." });
+                }
               } else {
-                setFillStatus({ type: "success", message: "Resume uploaded. Extraction failed: " + (response?.error || "Unknown error") });
+                const localParsed = parseResumeTextLocally(plainText);
+                if (localParsed) {
+                  applyParsedResumeData(localParsed, "text resume");
+                } else {
+                  setFillStatus({ type: "success", message: "Resume uploaded. Extraction failed: " + errMsg });
+                }
               }
             }
             setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
@@ -498,8 +784,9 @@ export function Popup() {
 
   const deleteResume = () => {
     setResume(null);
+    setParseSummary(null);
     if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.remove("jobFiller_resume", () => {
+      chrome.storage.local.remove(["jobFiller_resume", "jobFiller_lastParsedResume"], () => {
         setSaveStatus("Resume deleted");
         setTimeout(() => setSaveStatus(""), 2000);
       });
@@ -507,13 +794,15 @@ export function Popup() {
   };
 
   // Test Gemini API Key connection
-  const testGeminiConnection = () => {
+  const testGeminiConnection = useCallback(() => {
     if (!geminiApiKey.trim()) {
       setFillStatus({ type: "error", message: "Please enter an API Key first." });
       return;
     }
 
     setFillStatus({ type: "info", message: "Testing connection to Gemini..." });
+    setQuotaRetryCountdown(0);
+    quotaRetryAction.current = null;
 
     if (typeof chrome === "undefined" || !chrome.runtime) {
       setFillStatus({ type: "error", message: "Chrome extension API not available." });
@@ -534,11 +823,16 @@ export function Popup() {
         } else if (response && response.success) {
           setFillStatus({ type: "success", message: response.text });
         } else {
-          setFillStatus({ type: "error", message: response?.error || "Connection test failed." });
+          const errMsg = response?.error || "Connection test failed.";
+          if (/rate limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
+            startQuotaRetry(testGeminiConnection);
+          } else {
+            setFillStatus({ type: "error", message: errMsg });
+          }
         }
       }
     );
-  };
+  }, [geminiApiKey, startQuotaRetry]);
 
   // Trigger Fill Form Script
   const triggerFillForm = () => {
@@ -1063,6 +1357,26 @@ export function Popup() {
               </div>
             )}
 
+            {parseSummary && (
+              <div
+                className={`rounded-xl border p-3 text-xs ${
+                  parseSummary.personalCount + parseSummary.educationCount + parseSummary.workCount > 0
+                    ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-100"
+                    : "bg-rose-950/20 border-rose-800/50 text-rose-100"
+                }`}
+              >
+                <div className="font-bold mb-1">
+                  Last resume parse: {parseSummary.source}
+                </div>
+                <div className="grid grid-cols-4 gap-2 text-[10px] text-slate-300">
+                  <span>Personal: {parseSummary.personalCount}</span>
+                  <span>Education: {parseSummary.educationCount}</span>
+                  <span>Work: {parseSummary.workCount}</span>
+                  <span>Text: {parseSummary.resumeTextLength}</span>
+                </div>
+              </div>
+            )}
+
             <hr className="border-slate-900" />
 
             {/* Resume Plain Text Bio */}
@@ -1236,7 +1550,7 @@ export function Popup() {
         {/* Status display */}
         {fillStatus.message && (
           <div
-            className={`px-3 py-2 rounded-lg text-[10px] font-medium border flex items-center gap-2 transition duration-200 ${
+            className={`px-3 py-2 rounded-lg text-[10px] font-medium border flex items-start gap-2 transition duration-200 ${
               fillStatus.type === "success"
                 ? "bg-emerald-950/20 border-emerald-800/40 text-emerald-400"
                 : fillStatus.type === "error"
@@ -1244,10 +1558,36 @@ export function Popup() {
                 : "bg-cyan-950/20 border-cyan-800/40 text-cyan-400"
             }`}
           >
-            <span>
+            <span className="mt-px">
               {fillStatus.type === "success" ? "✅" : fillStatus.type === "error" ? "❌" : "ℹ️"}
             </span>
-            <span className="flex-1 leading-tight">{fillStatus.message}</span>
+            <span className="flex-1 leading-tight">
+              {quotaRetryCountdown > 0
+                ? `Rate limited — retrying in ${quotaRetryCountdown}s… (all free-tier models are busy)`
+                : fillStatus.message}
+            </span>
+            {quotaRetryCountdown > 0 && (
+              <div className="flex gap-2 shrink-0 mt-px">
+                <button
+                  onClick={() => {
+                    const action = quotaRetryAction.current;
+                    cancelQuotaRetry();
+                    if (action) action();
+                  }}
+                  className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 opacity-80 hover:opacity-100 transition"
+                  title="Retry immediately"
+                >
+                  Try Now
+                </button>
+                <button
+                  onClick={cancelQuotaRetry}
+                  className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-80 transition"
+                  title="Cancel auto-retry"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 

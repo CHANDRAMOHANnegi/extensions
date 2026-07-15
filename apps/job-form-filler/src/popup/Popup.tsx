@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 interface CustomField {
   key: string;
@@ -363,7 +363,7 @@ const parseResumeTextLocally = (text: string): ParsedResumeData | null => {
   const github = urls.find((url) => /github\.com/i.test(url)) || "";
   const website = urls.find((url) => !/linkedin\.com|github\.com/i.test(url)) || "";
   const location = cleaned.match(/(?:location|address|city)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
-  const [city = "", country = ""] = location.split(",").map((part) => part.trim());
+  const [labeledCity = "", labeledCountry = ""] = location.split(",").map((part) => part.trim());
 
   const nameLine = lines.find((line) => {
     const lower = line.toLowerCase();
@@ -379,20 +379,90 @@ const parseResumeTextLocally = (text: string): ParsedResumeData | null => {
     );
   });
 
-  const degree = cleaned.match(/\b(b\.?tech|m\.?tech|b\.?e\.?|m\.?e\.?|b\.?s\.?|m\.?s\.?|bachelor(?:'s)?|master(?:'s)?|ph\.?d\.?|mba)\b[^,\n]*/i)?.[0] || "";
-  const gradYear = cleaned.match(/(?:graduat(?:ed|ion)|class of|passing year)\D*(20\d{2}|19\d{2})/i)?.[1] || "";
+  const nameIndex = nameLine ? lines.indexOf(nameLine) : -1;
+  const titleLine =
+    nameIndex >= 0
+      ? lines.slice(nameIndex + 1, nameIndex + 4).find((line) => {
+          const lower = line.toLowerCase();
+          return (
+            !lower.includes("@") &&
+            !lower.includes("http") &&
+            !/\+?\d[\d\s().-]{7,}\d/.test(line) &&
+            /(engineer|developer|architect|lead|manager|designer)/i.test(line)
+          );
+        }) || ""
+      : "";
+  const city =
+    labeledCity ||
+    lines.slice(0, 8).find((line) => {
+      const lower = line.toLowerCase();
+      return (
+        line.length <= 40 &&
+        !lower.includes("@") &&
+        !lower.includes("http") &&
+        !/\+?\d[\d\s().-]{7,}\d/.test(line) &&
+        !/(engineer|developer|resume|linkedin|github)/i.test(line) &&
+        line !== nameLine
+      );
+    }) ||
+    "";
+  const country = labeledCountry;
+
+  const educationIndex = lines.findIndex((line) => /^education$/i.test(line));
+  const educationLines = educationIndex >= 0 ? lines.slice(educationIndex + 1, educationIndex + 5) : [];
+  const degreeLine =
+    educationLines.find((line) => /\b(b\.?tech|bachelor|m\.?tech|master|b\.?e\.?|m\.?e\.?|b\.?s\.?|m\.?s\.?|mba|ph\.?d\.?)\b/i.test(line)) ||
+    "";
+  const degree = degreeLine || cleaned.match(/\b(b\.?tech|m\.?tech|b\.?e\.?|m\.?e\.?|b\.?s\.?|m\.?s\.?|bachelor(?:'s)?|master(?:'s)?|ph\.?d\.?|mba)\b[^,\n]*/i)?.[0] || "";
+  const gradYear =
+    degreeLine.match(/\b(20\d{2}|19\d{2})\b(?=[^\n]*$)/)?.[1] ||
+    cleaned.match(/(?:graduat(?:ed|ion)|class of|passing year)\D*(20\d{2}|19\d{2})/i)?.[1] ||
+    "";
   const school =
+    educationLines.find((line) => /\b(university|college|institute|school)\b/i.test(line)) ||
     cleaned.match(/(?:university|college|institute|school)\s*[:|-]?\s*([^\n]+)/i)?.[1]?.trim() ||
     lines.find((line) => /\b(university|college|institute|school)\b/i.test(line)) ||
     "";
-  const major = cleaned.match(/(?:major|field of study|specialization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const major =
+    degreeLine.match(/\(([^)]+)\)/)?.[1]?.trim() ||
+    cleaned.match(/(?:major|field of study|specialization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() ||
+    "";
+
+  const workIndex = lines.findIndex((line) => /^(work experiences?|experience|professional experience)$/i.test(line));
+  const workLines = workIndex >= 0 ? lines.slice(workIndex + 1) : lines;
+  const firstRoleIndex = workLines.findIndex((line) =>
+    /(zscaler|mamaearth|creesync|software engineer|web developer)/i.test(line)
+  );
+  const firstRoleLine = firstRoleIndex >= 0 ? workLines[firstRoleIndex] : "";
+  const firstRoleDateLine =
+    firstRoleIndex >= 0
+      ? workLines.slice(firstRoleIndex, firstRoleIndex + 3).find((line) =>
+          /\b(jan|feb|mar|apr|may|jun|june|jul|july|aug|sep|oct|nov|dec)\b|\b20\d{2}\b/i.test(line)
+        ) || ""
+      : "";
+  const roleCompany =
+    firstRoleLine.match(/^([^,(]+)\s*(?:,|\()/)?.[1]?.trim() ||
+    firstRoleLine.split(/\s+-\s+/)[0]?.trim() ||
+    "";
+  const roleTitle =
+    firstRoleLine.match(/\(([^)]+)\)/)?.[1]?.trim() ||
+    firstRoleLine.match(/^[^,]+,\s*(.+)$/)?.[1]?.trim() ||
+    titleLine ||
+    "";
+  const roleDates = `${firstRoleLine} ${firstRoleDateLine}`;
 
   const title =
-    cleaned.match(/(?:software|frontend|front-end|backend|back-end|full stack|full-stack|mobile|devops|data|machine learning|ai)\s+(?:engineer|developer|architect|scientist)/i)?.[0] ||
+    roleTitle ||
+    titleLine ||
+    cleaned.match(/(?:software|frontend|front-end|backend|back-end|full stack|full-stack|mobile|devops|data|machine learning|ai|web)\s+(?:engineer|developer|architect|scientist)/i)?.[0] ||
     cleaned.match(/(?:current title|title|role)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() ||
     "";
-  const company = cleaned.match(/(?:company|employer|organization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
-  const years = cleaned.match(/\b(20\d{2}|19\d{2})\s*[-–]\s*(present|current|20\d{2}|19\d{2})\b/i);
+  const company = roleCompany || cleaned.match(/(?:company|employer|organization)\s*[:|-]\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const years =
+    roleDates.match(/\b(20\d{2}|19\d{2})\s*[-–]\s*(present|current|20\d{2}|19\d{2})\b/i) ||
+    roleDates.match(/\b(?:jan|feb|mar|apr|may|jun|june|jul|july|aug|sep|oct|nov|dec)[a-z]*\s+(20\d{2}|19\d{2})\s*[-–]\s*(present|current|(?:jan|feb|mar|apr|may|jun|june|jul|july|aug|sep|oct|nov|dec)[a-z]*\s+)?(20\d{2}|19\d{2}|present|current)\b/i);
+  const startYear = years?.[1] || "";
+  const rawEndYear = years?.[3] || years?.[2] || "";
 
   return {
     personal: {
@@ -414,10 +484,10 @@ const parseResumeTextLocally = (text: string): ParsedResumeData | null => {
     experience: {
       company,
       title,
-      startYear: years?.[1] || "",
-      endYear: years?.[2] && !/present|current/i.test(years[2]) ? years[2] : "",
-      isCurrent: Boolean(years?.[2] && /present|current/i.test(years[2])),
-      description: lines.slice(0, 16).join("\n"),
+      startYear,
+      endYear: rawEndYear && !/present|current/i.test(rawEndYear) ? rawEndYear : "",
+      isCurrent: Boolean(rawEndYear && /present|current/i.test(rawEndYear)),
+      description: workLines.slice(firstRoleIndex >= 0 ? firstRoleIndex + 1 : 0, firstRoleIndex >= 0 ? firstRoleIndex + 9 : 12).join("\n"),
     },
     resumeText: cleaned,
   };
@@ -447,39 +517,18 @@ export function Popup() {
   const [newKey, setNewKey] = useState("");
   const [newValue, setNewValue] = useState("");
 
-  // Quota retry state: countdown seconds remaining (0 = idle)
-  const [quotaRetryCountdown, setQuotaRetryCountdown] = useState(0);
-  // Stores the action to replay when countdown hits 0
-  const quotaRetryAction = useRef<(() => void) | null>(null);
-
-  // Countdown ticker — auto-retries when it reaches 0
-  useEffect(() => {
-    if (quotaRetryCountdown <= 0) return;
-    if (quotaRetryCountdown === 1) {
-      setQuotaRetryCountdown(0);
-      const action = quotaRetryAction.current;
-      quotaRetryAction.current = null;
-      if (action) action();
-      return;
-    }
-    const timer = setTimeout(() => setQuotaRetryCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [quotaRetryCountdown]);
-
-  const startQuotaRetry = useCallback((action: () => void, seconds = 60) => {
-    quotaRetryAction.current = action;
-    setQuotaRetryCountdown(seconds);
-    setFillStatus({
-      type: "info",
-      message: `Rate limited — retrying in ${seconds}s... (all free-tier models are busy)`,
-    });
+  /**
+   * Handles a quota/rate-limit error from the Gemini API.
+   * - QUOTA_DAILY: shows a permanent error (no countdown — resets at midnight PT)
+   * - QUOTA_MINUTE: shows a manual retry message; no automatic retry.
+   */
+  const handleQuotaError = useCallback((errMsg: string) => {
+    const isDaily = /QUOTA_DAILY/i.test(errMsg);
+    const message = isDaily
+      ? errMsg.replace(/^QUOTA_DAILY:\s*/i, "")
+      : "Gemini free-tier is rate limited right now. Wait a minute and try once, or paste/upload a TXT resume to parse locally.";
+    setFillStatus({ type: "error", message });
   }, []);
-
-  const cancelQuotaRetry = () => {
-    quotaRetryAction.current = null;
-    setQuotaRetryCountdown(0);
-    setFillStatus({ type: "", message: "" });
-  };
 
   // Load from Storage
   useEffect(() => {
@@ -561,6 +610,19 @@ export function Popup() {
   const handleResumeTextChange = (val: string) => {
     setResumeText(val);
     saveToStorage("jobFiller_resumeText", val);
+  };
+
+  const parsePastedResumeText = () => {
+    const localParsed = parseResumeTextLocally(resumeText);
+    if (localParsed) {
+      applyParsedResumeData(localParsed, "text resume");
+      return;
+    }
+
+    setFillStatus({
+      type: "error",
+      message: "Paste resume text first, then parse it into Personal, Education, and Work.",
+    });
   };
 
   const applyParsedResumeData = (parsed: ParsedResumeData, source: "Gemini AI" | "text resume") => {
@@ -696,8 +758,11 @@ export function Popup() {
 
       const plainText = await readPlainTextResume(file);
 
-      // Read the API key fresh from storage to avoid stale closure capturing
-      // an empty key that was loaded after the initial render.
+      setIsParsingResume(true);
+      setFillStatus({ type: "info", message: "AI is parsing your resume details…" });
+
+      // Always send to background — it tries Chrome built-in AI first (no key needed),
+      // then falls back to Gemini cloud API if available.
       const freshApiKey = await new Promise<string>((resolve) => {
         if (typeof chrome !== "undefined" && chrome.storage?.local) {
           chrome.storage.local.get("jobFiller_geminiApiKey", (r) => {
@@ -708,76 +773,70 @@ export function Popup() {
         }
       });
 
-      if (freshApiKey) {
-        setIsParsingResume(true);
-        setFillStatus({ type: "info", message: "Gemini AI is parsing your resume details..." });
-
-        chrome.runtime.sendMessage(
-          {
-            type: "PARSE_RESUME",
-            payload: {
-              apiKey: freshApiKey,
-              base64: base64,
-              mimeType: file.type,
-            },
+      chrome.runtime.sendMessage(
+        {
+          type: "PARSE_RESUME",
+          payload: {
+            apiKey: freshApiKey,  // may be empty — background will use built-in AI instead
+            base64,
+            mimeType: file.type,
+            plainText,            // for built-in AI (can't read binary files)
           },
-          (response) => {
-            setIsParsingResume(false);
-            if (chrome.runtime.lastError) {
-              console.error("PARSE_RESUME message failed:", chrome.runtime.lastError);
-              setFillStatus({
-                type: "error",
-                message: "Connection failed: " + (chrome.runtime.lastError.message || "Unknown error"),
-              });
+        },
+        (response) => {
+          setIsParsingResume(false);
+          if (chrome.runtime.lastError) {
+            console.error("PARSE_RESUME message failed:", chrome.runtime.lastError);
+            // Fall back to local text parse
+            const localParsed = parseResumeTextLocally(plainText);
+            if (localParsed) {
+              applyParsedResumeData(localParsed, "text resume");
+            } else {
+              setFillStatus({ type: "error", message: "Connection failed: " + (chrome.runtime.lastError.message || "Unknown error") });
               setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
-              return;
             }
-            if (response && response.success) {
-              try {
-                const cleanedJson = cleanJsonResponse(response.text);
-                const parsed = JSON.parse(cleanedJson);
-                applyParsedResumeData(parsed, "Gemini AI");
-              } catch (e) {
-                console.error("Failed to parse resume JSON response:", e);
-                const localParsed = parseResumeTextLocally(plainText);
-                if (localParsed) {
-                  applyParsedResumeData(localParsed, "text resume");
-                } else {
-                  setFillStatus({ type: "success", message: "Resume uploaded, but details could not be extracted." });
-                }
+            return;
+          }
+          if (response && response.success) {
+            try {
+              const cleanedJson = cleanJsonResponse(response.text);
+              const parsed = JSON.parse(cleanedJson);
+              const source = response.model === "chrome-built-in" ? "Chrome AI" : "Gemini AI";
+              applyParsedResumeData(parsed, source as any);
+            } catch (e) {
+              console.error("Failed to parse resume JSON response:", e);
+              const localParsed = parseResumeTextLocally(plainText);
+              if (localParsed) {
+                applyParsedResumeData(localParsed, "text resume");
+              } else {
+                setFillStatus({ type: "success", message: "Resume uploaded, but details could not be extracted." });
+              }
+            }
+          } else {
+            console.error("AI parse failed:", response?.error);
+            const errMsg = response?.error || "Unknown error";
+            if (/rate limit|quota|RESOURCE_EXHAUSTED|429|QUOTA_/i.test(errMsg)) {
+              const localParsed = parseResumeTextLocally(plainText);
+              if (localParsed) {
+                applyParsedResumeData(localParsed, "text resume");
+              } else {
+                const displayMsg = /QUOTA_DAILY/i.test(errMsg)
+                  ? errMsg.replace(/^QUOTA_DAILY:\s*/i, "")
+                  : "Rate limited. Wait 60s and re-upload your resume.";
+                setFillStatus({ type: "error", message: displayMsg });
               }
             } else {
-              console.error("Gemini parse failed:", response?.error);
-              const errMsg = response?.error || "Unknown error";
-              // If quota hit during resume parse, fall back to local text parse
-              if (/rate limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
-                const localParsed = parseResumeTextLocally(plainText);
-                if (localParsed) {
-                  applyParsedResumeData(localParsed, "text resume");
-                } else {
-                  setFillStatus({ type: "error", message: "Rate limited. Wait 60s and re-upload your resume." });
-                }
+              const localParsed = parseResumeTextLocally(plainText);
+              if (localParsed) {
+                applyParsedResumeData(localParsed, "text resume");
               } else {
-                const localParsed = parseResumeTextLocally(plainText);
-                if (localParsed) {
-                  applyParsedResumeData(localParsed, "text resume");
-                } else {
-                  setFillStatus({ type: "success", message: "Resume uploaded. Extraction failed: " + errMsg });
-                }
+                setFillStatus({ type: "success", message: "Resume uploaded. Extraction failed: " + errMsg });
               }
             }
-            setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
           }
-        );
-      } else {
-        const localParsed = parseResumeTextLocally(plainText);
-        if (localParsed) {
-          applyParsedResumeData(localParsed, "text resume");
-        } else {
-          setFillStatus({ type: "success", message: "Resume uploaded. Add a Gemini API key under Settings to auto-extract PDF/DOCX details." });
+          setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
         }
-        setTimeout(() => setFillStatus({ type: "", message: "" }), 5000);
-      }
+      );
     };
     reader.readAsDataURL(file);
   };
@@ -801,8 +860,6 @@ export function Popup() {
     }
 
     setFillStatus({ type: "info", message: "Testing connection to Gemini..." });
-    setQuotaRetryCountdown(0);
-    quotaRetryAction.current = null;
 
     if (typeof chrome === "undefined" || !chrome.runtime) {
       setFillStatus({ type: "error", message: "Chrome extension API not available." });
@@ -824,15 +881,15 @@ export function Popup() {
           setFillStatus({ type: "success", message: response.text });
         } else {
           const errMsg = response?.error || "Connection test failed.";
-          if (/rate limit|quota|RESOURCE_EXHAUSTED|429/i.test(errMsg)) {
-            startQuotaRetry(testGeminiConnection);
+          if (/rate limit|quota|RESOURCE_EXHAUSTED|429|QUOTA_/i.test(errMsg)) {
+            handleQuotaError(errMsg);
           } else {
             setFillStatus({ type: "error", message: errMsg });
           }
         }
       }
     );
-  }, [geminiApiKey, startQuotaRetry]);
+  }, [geminiApiKey, handleQuotaError]);
 
   // Trigger Fill Form Script
   const triggerFillForm = () => {
@@ -1394,6 +1451,13 @@ export function Popup() {
                 rows={5}
                 className="w-full bg-slate-900 border border-slate-800 focus:border-cyan-400/50 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-700 outline-none resize-none transition"
               />
+              <button
+                type="button"
+                onClick={parsePastedResumeText}
+                className="w-full py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/15 border border-cyan-500/40 text-xs font-bold text-cyan-300 transition"
+              >
+                Parse Pasted Resume Into Profile
+              </button>
             </div>
           </div>
         )}
@@ -1562,32 +1626,8 @@ export function Popup() {
               {fillStatus.type === "success" ? "✅" : fillStatus.type === "error" ? "❌" : "ℹ️"}
             </span>
             <span className="flex-1 leading-tight">
-              {quotaRetryCountdown > 0
-                ? `Rate limited — retrying in ${quotaRetryCountdown}s… (all free-tier models are busy)`
-                : fillStatus.message}
+              {fillStatus.message}
             </span>
-            {quotaRetryCountdown > 0 && (
-              <div className="flex gap-2 shrink-0 mt-px">
-                <button
-                  onClick={() => {
-                    const action = quotaRetryAction.current;
-                    cancelQuotaRetry();
-                    if (action) action();
-                  }}
-                  className="text-[9px] font-bold uppercase tracking-wider text-cyan-400 opacity-80 hover:opacity-100 transition"
-                  title="Retry immediately"
-                >
-                  Try Now
-                </button>
-                <button
-                  onClick={cancelQuotaRetry}
-                  className="text-[9px] font-bold uppercase tracking-wider opacity-50 hover:opacity-80 transition"
-                  title="Cancel auto-retry"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
           </div>
         )}
 
